@@ -1,0 +1,6 @@
+requests
+pymongo
+schedule
+streamlit
+plotly
+pandas
