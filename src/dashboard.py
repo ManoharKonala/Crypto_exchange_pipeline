@@ -1,162 +1,207 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 import sqlite3
 import os
+import numpy as np
 from datetime import datetime, timezone, timedelta
 
 # ─── Config ───────────────────────────────────────────────────────
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "crypto_arb.db")
 IST = timezone(timedelta(hours=5, minutes=30))
+EXCHANGES = ["Kraken", "Coinbase", "Bitfinex", "Gemini"]
+ASSETS = ["BTC", "ETH", "SOL"]
 
 st.set_page_config(
-    page_title="₿ Arbitrage Matrix",
-    page_icon="🕸️",
+    page_title="₿ Pro Matrix Terminal",
+    page_icon="💸",
     layout="wide",
 )
 
-# ─── Custom CSS ───────────────────────────────────────────────────
+# ─── Custom Styles ───────────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+    
     .stApp {
-        background: linear-gradient(135deg, #0f0c29, #1a1a2e, #16213e);
-        color: #e0e0e0;
-        font-family: 'Inter', sans-serif;
+        background: radial-gradient(circle at 10% 10%, #0d1117 0%, #010409 100%);
+        color: #c9d1d9; font-family: 'Inter', sans-serif;
     }
-
-    .main-header { text-align: center; padding: 1.5rem 0; }
-    .main-header h1 {
-        font-size: 2.8rem;
-        background: linear-gradient(90deg, #f7931a, #ffb347);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800;
-    }
-
-    .matrix-card {
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 20px;
-        padding: 2rem;
+    
+    .glass-card {
+        background: rgba(22, 27, 34, 0.6);
+        border: 1px solid rgba(240, 246, 252, 0.1);
+        border-radius: 16px; padding: 20px;
         backdrop-filter: blur(10px);
     }
-
-    .opp-badge {
-        background: rgba(100, 255, 218, 0.1);
-        border: 1px solid #64ffda;
-        color: #64ffda;
-        padding: 1rem;
-        border-radius: 12px;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
+    
+    .stat-label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; }
+    .stat-value { font-size: 1.8rem; font-weight: 800; color: #58a6ff; }
+    
+    .profit-positive { color: #3fb950; font-weight: 700; }
+    .profit-negative { color: #f85149; font-weight: 700; }
 
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-def load_data():
-    if not os.path.exists(DB_PATH):
-        return pd.DataFrame()
+# ─── Data Loading ────────────────────────────────────────────────
+def load_data(asset=None, limit=100):
+    if not os.path.exists(DB_PATH): return pd.DataFrame()
     conn = sqlite3.connect(DB_PATH)
-    # Check if new columns exist, otherwise fallback or wait
     try:
-        df = pd.read_sql_query("SELECT * FROM spreads ORDER BY timestamp DESC LIMIT 100", conn)
+        if asset:
+            query = f"SELECT * FROM spreads WHERE asset='{asset}' ORDER BY timestamp DESC LIMIT {limit}"
+        else:
+            query = f"SELECT * FROM spreads ORDER BY timestamp DESC LIMIT {limit * 3}"
+        df = pd.read_sql_query(query, conn)
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(IST)
     except:
         df = pd.DataFrame()
     conn.close()
     return df
 
-st.markdown('<div class="main-header"><h1>₿ Crypto Arbitrage Matrix</h1><p>Real-time monitoring across Kraken, Coinbase, Bitfinex, and Gemini</p></div>', unsafe_allow_html=True)
+# ─── Header ──────────────────────────────────────────────────────
+st.markdown("""
+<div style="text-align: center; padding: 2rem 0;">
+    <h1 style="font-size: 3rem; margin:0; background: linear-gradient(90deg, #58a6ff, #bc8cff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">PRO ARBITRAGE TERMINAL</h1>
+    <p style="color: #8b949e; font-size: 1.1rem;">High-fidelity cross-exchange spread analysis</p>
+</div>
+""", unsafe_allow_html=True)
 
-df = load_data()
+# ─── Main Tabs ───────────────────────────────────────────────────
+tab1, tab2 = st.tabs(["📊 Market Overview", "🔍 Asset Deep-Dive"])
 
-if not df.empty and "best_spread" in df.columns:
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True).dt.tz_convert(IST)
-    latest = df.iloc[0]
-
-    # ─── Top Opportunity Dial ─────────────────────────────────────
-    st.markdown(f"""
-    <div class="opp-badge">
-        <h2 style="margin:0; font-size: 1.5rem;">🔥 Best Opportunity: {latest['best_spread']:.4f}%</h2>
-        <p style="margin:5px 0 0 0; font-size: 1.1rem;">
-            Buy on <strong style="color:white">{latest['buy_at']}</strong> ⮕ 
-            Sell on <strong style="color:white">{latest['sell_at']}</strong>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ─── Metric Matrix ────────────────────────────────────────────
-    col1, col2, col3, col4 = st.columns(4)
-    exchanges = ["Kraken", "Coinbase", "Bitfinex", "Gemini"]
-    cols = [col1, col2, col3, col4]
+with tab1:
+    st.markdown("### 🌍 Global Market Status")
+    all_data = load_data(limit=10) # Get latest for all
     
-    for i, ex in enumerate(exchanges):
-        price = latest[ex.lower()]
-        with cols[i]:
-            is_low = (ex == latest['buy_at'])
-            is_high = (ex == latest['sell_at'])
-            border = "2px solid #64ffda" if is_low else ("2px solid #ff5252" if is_high else "1px solid rgba(255,255,255,0.1)")
-            label = " (LOWEST)" if is_low else (" (HIGHEST)" if is_high else "")
+    if not all_data.empty:
+        # Create a summary table for latest prices of all assets
+        summary_rows = []
+        for asset in ASSETS:
+            asset_latest = all_data[all_data['asset'] == asset].head(1)
+            if not asset_latest.empty:
+                row = asset_latest.iloc[0]
+                summary_rows.append({
+                    "Asset": asset,
+                    "Net Profit %": f"{row['net_profit']:.3f}%",
+                    "Buy At": row['buy_at'],
+                    "Sell At": row['sell_at'],
+                    "Last Update": row['timestamp'].strftime('%H:%M:%S'),
+                    "raw_profit": row['net_profit']
+                })
+        
+        sum_df = pd.DataFrame(summary_rows)
+        
+        # Display as cards or table
+        cols = st.columns(len(ASSETS))
+        for i, asset in enumerate(ASSETS):
+            with cols[i]:
+                asset_row = next((item for item in summary_rows if item["Asset"] == asset), None)
+                if asset_row:
+                    color = "#3fb950" if asset_row['raw_profit'] > 0 else "#f85149"
+                    st.markdown(f"""
+                    <div class="glass-card" style="border-left: 5px solid {color}">
+                        <div class="stat-label">{asset} LATEST</div>
+                        <div class="stat-value" style="color:{color}">{asset_row['Net Profit %']}</div>
+                        <div style="font-size:0.9rem; margin-top:5px;">
+                            {asset_row['Buy At']} ⮕ {asset_row['Sell At']}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        # Multi-Asset Profit Comparison Chart
+        full_history = load_data(limit=50) # Load more for the chart
+        if not full_history.empty:
+            fig_multi = px.line(full_history, x="timestamp", y="net_profit", color="asset",
+                                title="Cross-Asset Net Profit History",
+                                template="plotly_dark",
+                                color_discrete_map={"BTC": "#f7931a", "ETH": "#627eea", "SOL": "#14f195"})
+            fig_multi.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.3)
+            fig_multi.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig_multi, use_container_width=True)
+
+with tab2:
+    col_side, col_main = st.columns([1, 4])
+    
+    with col_side:
+        st.markdown("### ⚙️ Filters")
+        sel_asset = st.selectbox("Deep Dive Asset", ASSETS, index=0)
+        history_len = st.slider("Historical Window", 50, 500, 100)
+        st.markdown("---")
+        st.info("💡 Heatmap shows the potential percentage gain between any two exchanges.")
+
+    df_asset = load_data(sel_asset, limit=history_len)
+    
+    if not df_asset.empty:
+        latest = df_asset.iloc[0]
+        
+        # ─── Statistics Header ────────────────────────────────────
+        s1, s2, s3, s4 = st.columns(4)
+        with s1: st.metric("Max Profit (Window)", f"{df_asset['net_profit'].max():.3f}%")
+        with s2: st.metric("Min Profit (Window)", f"{df_asset['net_profit'].min():.3f}%")
+        with s3: st.metric("Avg Profit (Window)", f"{df_asset['net_profit'].mean():.3f}%")
+        with s4: 
+            opportunities = len(df_asset[df_asset['net_profit'] > 0])
+            st.metric("Win Rate", f"{(opportunities/len(df_asset))*100:.1f}%")
+
+        # ─── Main Heatmap ─────────────────────────────────────────
+        st.markdown("### 🌡️ Scalping Heatmap (Buy ⮕ Sell)")
+        
+        # Build Heatmap Matrix for Latest Data
+        matrix_data = []
+        for buy_ex in EXCHANGES:
+            row = []
+            buy_price = latest[buy_ex.lower()]
+            for sell_ex in EXCHANGES:
+                if buy_ex == sell_ex:
+                    row.append(0)
+                else:
+                    sell_price = latest[sell_ex.lower()]
+                    # Logic: (Sell - Buy) / Buy * 100 - Fee (0.3)
+                    spread = ((sell_price - buy_price) / buy_price) * 100 - 0.3
+                    row.append(spread)
+            matrix_data.append(row)
+        
+        fig_heat = px.imshow(
+            matrix_data,
+            labels=dict(x="Selling Exchange", y="Buying Exchange", color="Net Profit %"),
+            x=EXCHANGES, y=EXCHANGES,
+            color_continuous_scale="RdYlGn",
+            text_auto=".3f",
+            aspect="auto",
+            template="plotly_dark"
+        )
+        fig_heat.update_layout(height=450, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig_heat, use_container_width=True)
+
+        # ─── Price Offset Chart ──────────────────────────────────
+        st.markdown("### 📊 Price Displacement (vs. Market Mean)")
+        df_sorted = df_asset.sort_values("timestamp")
+        # Calculate market mean per timestamp
+        df_sorted['mean_price'] = df_sorted[ [ex.lower() for ex in EXCHANGES] ].mean(axis=1)
+        
+        fig_offset = go.Figure()
+        for ex in EXCHANGES:
+            offset = ((df_sorted[ex.lower()] - df_sorted['mean_price']) / df_sorted['mean_price']) * 100
+            fig_offset.add_trace(go.Scatter(x=df_sorted['timestamp'], y=offset, name=ex, fill='tozeroy'))
             
-            st.markdown(f"""
-            <div style="background:rgba(255,255,255,0.02); border:{border}; border-radius:12px; padding:1rem; text-align:center;">
-                <div style="font-size:0.8rem; color:#8892b0; text-transform:uppercase;">{ex}{label}</div>
-                <div style="font-size:1.5rem; font-weight:700;">${price:,.2f}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        fig_offset.update_layout(
+            title="Relative Price Deviation % (How much an exchange leads/lags)",
+            yaxis_title="Deviation % from Mean",
+            template="plotly_dark",
+            height=400,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)"
+        )
+        st.plotly_chart(fig_offset, use_container_width=True)
 
-    # ─── Trend Chart ──────────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    df_chart = df.sort_values(by="timestamp")
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df_chart["timestamp"], y=df_chart["best_spread"],
-        mode="lines+markers",
-        line=dict(color="#f7931a", width=3, shape="spline"),
-        fill="tozeroy",
-        fillcolor="rgba(247, 147, 26, 0.1)",
-        name="Market Spread %"
-    ))
-    
-    fig.update_layout(
-        title="Maximum Market Spread Over Time",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#8892b0"),
-        xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.05)", ticksuffix="%"),
-        height=400,
-        margin=dict(l=0, r=0, t=40, b=0)
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning(f"No deep-dive data available for {sel_asset}.")
 
-    # ─── Detailed Matrix Chart ────────────────────────────────────
-    fig2 = go.Figure()
-    for ex in exchanges:
-        fig2.add_trace(go.Scatter(
-            x=df_chart["timestamp"], y=df_chart[ex.lower()],
-            name=ex, line=dict(width=2, shape="spline")
-        ))
-    
-    fig2.update_layout(
-        title="Exchange Price Comparison",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#8892b0"),
-        xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
-        yaxis=dict(gridcolor="rgba(255,255,255,0.05)", tickprefix="$"),
-        height=400
-    )
-    st.plotly_chart(fig2, use_container_width=True)
-
-    if st.button("🔄 Refresh Data"):
-        st.rerun()
-
-else:
-    st.info("Waiting for Price Matrix data... Ensure ingest.py is running.")
+if st.sidebar.button("🔄 Force Refresh"):
+    st.rerun()

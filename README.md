@@ -1,33 +1,45 @@
-# No-KYC Crypto Arbitrage Scanner
+# ₿ Pro Arbitrage Matrix Terminal
 
-This project is a real-time data pipeline that detects price differences for Bitcoin (BTC) between a global average (CoinGecko) and a specific exchange (Kraken).
+A professional-grade, real-time cryptocurrency arbitrage scanner. This tool monitors price discrepancies across multiple exchanges and multiple assets, accounting for trading fees to identify actual net-profit opportunities.
 
-## Features
-- **Zero Authentication:** Uses only public APIs.
-- **Rate Limit Aware:** Scheduled to run every 30 seconds.
-- **Data Persistence:** Stores data in a local MongoDB database.
-- **Visual Dashboard:** Streamlit dashboard to visualize spread history.
+## 🚀 Pro Features
+- **Multi-Asset Ingestion**: Tracks **BTC, ETH, and SOL** simultaneously.
+- **Multi-Exchange Matrix**: Real-time Bid/Ask data from **Kraken, Coinbase, Bitfinex, and Gemini**.
+- **Fee-Aware Modeling**: Automatically subtracts a **0.3% round-trip fee** from gross spreads.
+- **Interactive Terminal**: 
+    - **Market Overview**: Global heat-check of all tracked assets.
+    - **Deep-Dive Analytics**: Individual asset performance, heatmaps, and price displacement charts.
+- **Zero Authentication**: Built 100% on public APIs (No KYC/API Keys required for monitoring).
+- **SQLite Backend**: Efficient, serverless local data persistence.
 
-## Setup
+## 🛠️ Setup
 
-1.  **Prerequisites:**
-    - Python 3.12+
-
-2.  **Installation:**
+1.  **Installation**:
     ```bash
     pip install -r requirements.txt
     ```
 
-3.  **Running the Ingestion Script:**
+2.  **Start Data Ingestion**:
+    The ingestion engine cycles through assets every 30 seconds.
     ```bash
     python src/ingest.py
     ```
 
-4.  **Running the Dashboard:**
+3.  **Launch the Dashboard**:
+    Open the high-fidelity interactive terminal.
     ```bash
     streamlit run src/dashboard.py
     ```
 
-## Project Structure
-- `src/ingest.py`: Main data fetcher and logic engine.
-- `src/dashboard.py`: Streamlit frontend for visualization.
+## 📂 Project Structure
+- `src/ingest.py`: Multi-threaded data logic, Bid/Ask scrapers, and SQLite persistence.
+- `src/dashboard.py`: Streamlit-based Pro Terminal with interactive Plotly visualizations.
+- `crypto_arb.db`: Local SQLite database (Auto-created).
+
+## 📊 Analytics Deep Dive
+- **Net Profit**: Gross Spread minus simulated exchange fees.
+- **Price Displacement**: Measures how much a specific exchange price deviates from the global market mean.
+- **Scalping Heatmap**: Inter-exchange profitability matrix (Buy on X ⮕ Sell on Y).
+
+---
+*Developed for high-fidelity crypto market monitoring.*
