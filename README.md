@@ -12,7 +12,6 @@ This project is a real-time data pipeline that detects price differences for Bit
 
 1.  **Prerequisites:**
     - Python 3.12+
-    - MongoDB installed and running locally on port 27017.
 
 2.  **Installation:**
     ```bash

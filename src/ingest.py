@@ -1,15 +1,29 @@
 import time
 import requests
 import schedule
-from pymongo import MongoClient
+import sqlite3
 from datetime import datetime, timezone
+import os
 
 # Constants
 COINGECKO_URL = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
 KRAKEN_URL = "https://api.kraken.com/0/public/Ticker?pair=XBTUSD"
-MONGO_URI_LOCAL = "mongodb://localhost:27017/"
-DB_NAME = "crypto_arb_db"
-COLLECTION_NAME = "spreads"
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "crypto_arb.db")
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS spreads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            price_cg REAL,
+            price_kraken REAL,
+            spread_pct REAL
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
 def job():
     try:
@@ -28,32 +42,31 @@ def job():
         # Calculation
         spread_pct = ((price_kraken - price_cg) / price_cg) * 100
         
-        # Timestamp
+        # Timestamp (ISO format for easier SQLite handling)
         now = datetime.now(timezone.utc)
-        
-        # Document
-        doc = {
-            "timestamp": now,
-            "price_cg": price_cg,
-            "price_kraken": price_kraken,
-            "spread_pct": spread_pct
-        }
+        timestamp_str = now.isoformat()
         
         # Storage
-        client = MongoClient(MONGO_URI_LOCAL)
-        db = client[DB_NAME]
-        collection = db[COLLECTION_NAME]
-        collection.insert_one(doc)
-        client.close()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO spreads (timestamp, price_cg, price_kraken, spread_pct)
+            VALUES (?, ?, ?, ?)
+        ''', (timestamp_str, price_cg, price_kraken, spread_pct))
+        conn.commit()
+        conn.close()
         
         # Console Output
-        print(f"[{now.strftime('%H:%M:%S')}] CG: ${price_cg:,.2f} | KR: ${price_kraken:,.2f} | Spread: {spread_pct:.2f}%")
+        print(f"[{now.strftime('%H:%M:%S')}] CG: ${price_cg:,.2f} | KR: ${price_kraken:,.2f} | Spread: {spread_pct:.4f}%")
         
     except Exception as e:
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Error: {e}")
 
 if __name__ == "__main__":
-    print("Starting Crypto Arbitrage Ingestion...")
+    print("Initializing SQLite Database...")
+    init_db()
+    
+    print("Starting Crypto Arbitrage Ingestion (SQLite)...")
     print("Press Ctrl+C to stop.")
     
     # Run immediately once to verify

@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from pymongo import MongoClient
-from datetime import timezone, timedelta
+import sqlite3
+import os
+from datetime import datetime, timezone, timedelta
 
 # ─── Config ───────────────────────────────────────────────────────
-MONGO_URI = "mongodb://localhost:27017/"
-DB_NAME = "crypto_arb_db"
-COLLECTION = "spreads"
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "crypto_arb.db")
 IST = timezone(timedelta(hours=5, minutes=30))
 
 st.set_page_config(
@@ -156,31 +155,32 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─── DB Connection ────────────────────────────────────────────────
-@st.cache_resource
-def get_client():
-    return MongoClient(MONGO_URI)
+def load_data():
+    if not os.path.exists(DB_PATH):
+        return pd.DataFrame()
+    
+    conn = sqlite3.connect(DB_PATH)
+    query = "SELECT * FROM spreads ORDER BY timestamp DESC LIMIT 100"
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    return df
 
 try:
-    client = get_client()
-    db = client[DB_NAME]
-    collection = db[COLLECTION]
-
     # Controls row
     ctrl_col1, ctrl_col2 = st.columns([1, 5])
     with ctrl_col1:
         if st.button("🔄  Refresh"):
             st.rerun()
     with ctrl_col2:
-        st.markdown('<span class="status-badge">● PIPELINE ACTIVE</span>', unsafe_allow_html=True)
+        st.markdown('<span class="status-badge">● PIPELINE ACTIVE (SQLite)</span>', unsafe_allow_html=True)
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
 
     # ─── Fetch Data ───────────────────────────────────────────────
-    items = list(collection.find().sort("timestamp", -1).limit(100))
+    df = load_data()
 
-    if items:
-        df = pd.DataFrame(items)
-        # Convert UTC timestamps to IST for display
+    if not df.empty:
+        # Convert ISO timestamps to datetime and then to IST for display
         df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.tz_localize("UTC").dt.tz_convert(IST)
         latest = df.iloc[0]
 
@@ -320,10 +320,10 @@ try:
 
         # Raw data
         with st.expander("📋 View Raw Data"):
-            st.dataframe(df.drop(columns=["_id"], errors="ignore"), use_container_width=True)
+            st.dataframe(df, use_container_width=True)
 
     else:
-        st.warning("⏳ No data found. Make sure `ingest.py` is running and collecting data.")
+        st.warning("⏳ No data found. Make sure `ingest.py` is running and collecting data into `crypto_arb.db`.")
 
 except Exception as e:
-    st.error(f"❌ MongoDB connection error: {e}")
+    st.error(f"❌ SQLite error: {e}")
