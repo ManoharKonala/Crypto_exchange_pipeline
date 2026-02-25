@@ -16,8 +16,8 @@ TRADING_FEE_PCT = 0.15
 
 # 🔔 Telegram Alerts Config
 # Set these in your Environment Variables for real usage
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8616213172:AAFK09ORDc4cBEMJnUSIUHiZhYDv5Z13PMU")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "6957241760")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "Add Your token")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "Add your ID")
 PROFIT_THRESHOLD = -2.0  # Set artificially low for demonstration
 
 # State to handle anti-spam (last alert time per asset)
