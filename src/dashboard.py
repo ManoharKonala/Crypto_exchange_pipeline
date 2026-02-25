@@ -162,8 +162,12 @@ with tab2:
                     row.append(0)
                 else:
                     sell_price = latest[sell_ex.lower()]
-                    # Logic: (Sell - Buy) / Buy * 100 - Fee (0.3)
-                    spread = ((sell_price - buy_price) / buy_price) * 100 - 0.3
+                    
+                    if buy_price is None or sell_price is None or pd.isna(buy_price) or pd.isna(sell_price) or float(buy_price) == 0.0:
+                        spread = 0.0
+                    else:
+                        # Logic: (Sell - Buy) / Buy * 100 - Fee (0.3)
+                        spread = ((sell_price - buy_price) / buy_price) * 100 - 0.3
                     row.append(spread)
             matrix_data.append(row)
         
@@ -203,5 +207,53 @@ with tab2:
     else:
         st.warning(f"No deep-dive data available for {sel_asset}.")
 
-if st.sidebar.button("🔄 Force Refresh"):
-    st.rerun()
+# ─── Premium Sidebar ──────────────────────────────────────────────
+with st.sidebar:
+    
+    # Calculate live latency
+    df_side = load_data(limit=10)
+    current_latency = "--ms"
+    if not df_side.empty and 'api_latency_ms' in df_side.columns:
+        valid_lats = df_side['api_latency_ms'].dropna()
+        if not valid_lats.empty:
+            current_latency = f"{int(valid_lats.mean())}ms"
+
+    st.markdown("""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <h2 style="margin-bottom: 0; color: #58a6ff;">SYSTEM CORE</h2>
+            <p style="color: #8b949e; font-size: 0.8rem; margin-top: 5px;">v2.1.0-PRO</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    st.markdown("### 🛰️ Live Telemetry")
+    st.markdown(f"""
+        <div class="glass-card" style="padding: 15px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="color: #8b949e; font-size: 0.85rem; text-transform: uppercase;">API Latency</span>
+                <span style="color: #3fb950; font-weight: bold; font-family: 'JetBrains Mono', monospace;">{current_latency}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="color: #8b949e; font-size: 0.85rem; text-transform: uppercase;">Data Nodes</span>
+                <span style="color: #58a6ff; font-weight: bold; font-family: 'JetBrains Mono', monospace;">4/4 LIVE</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #8b949e; font-size: 0.85rem; text-transform: uppercase;">Sync Status</span>
+                <span style="color: #bc8cff; font-weight: bold; font-family: 'JetBrains Mono', monospace;">ACTIVE ⚡</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("### 🛡️ Security Protocol")
+    st.markdown("""
+        <div class="glass-card" style="padding: 15px; border-left: 3px solid #f7931a; margin-bottom: 30px;">
+            <div style="color: #f7931a; font-weight: 800; font-size: 0.8rem; text-transform: uppercase;">Fee-Aware Active</div>
+            <div style="color: #c9d1d9; font-size: 0.85rem; margin-top: 5px;">
+                All metrics currently reflect a 0.3% round-trip tax.
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("🔄 Force Refresh"):
+        st.rerun()

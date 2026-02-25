@@ -16,9 +16,9 @@ TRADING_FEE_PCT = 0.15
 
 # 🔔 Telegram Alerts Config
 # Set these in your Environment Variables for real usage
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-PROFIT_THRESHOLD = 0.5  # Trigger alert if net_profit > 0.5%
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8616213172:AAFK09ORDc4cBEMJnUSIUHiZhYDv5Z13PMU")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "6957241760")
+PROFIT_THRESHOLD = -2.0  # Set artificially low for demonstration
 
 # State to handle anti-spam (last alert time per asset)
 LAST_ALERTS = {} 
@@ -50,12 +50,12 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Check if we need to migrate (if 'asset' column is missing)
+    # Check if we need to migrate
     cursor.execute("PRAGMA table_info(spreads)")
     columns = [col[1] for col in cursor.fetchall()]
     
-    if columns and "asset" not in columns:
-        print("Migrating database to Pro schema...")
+    if columns and ("asset" not in columns or "api_latency_ms" not in columns):
+        print("Migrating database to Pro schema (adding latency)...")
         cursor.execute("DROP TABLE spreads")
     
     # New schema with asset and net_profit support
@@ -71,20 +71,25 @@ def init_db():
             kraken REAL,
             coinbase REAL,
             bitfinex REAL,
-            gemini REAL
+            gemini REAL,
+            api_latency_ms REAL
         )
     ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON spreads(timestamp);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_asset ON spreads(asset);')
     conn.commit()
     conn.close()
 
 def fetch_data(name, config, symbol):
     try:
+        start_time = time.time()
         url = config["url"](symbol)
         res = requests.get(url, timeout=10)
         res.raise_for_status()
-        return config["parser"](res.json(), symbol)
+        latency_ms = (time.time() - start_time) * 1000
+        return config["parser"](res.json(), symbol), latency_ms
     except Exception as e:
-        return None
+        return None, 0
 
 def send_telegram_alert(asset, spread, buy_at, sell_at):
     if not BOT_TOKEN or not CHAT_ID:
@@ -124,11 +129,16 @@ def job():
         try:
             asks = {} # Prices we BUY at
             bids = {} # Prices we SELL at
+            latencies = []
             
             for name, config in PROVIDERS.items():
-                data = fetch_data(name, config, asset)
-                if data:
+                data_result = fetch_data(name, config, asset)
+                if data_result[0]:
+                    data, latency = data_result
                     asks[name], bids[name] = data
+                    latencies.append(latency)
+            
+            avg_latency = sum(latencies) / len(latencies) if latencies else 0
             
             if len(asks) < 2:
                 continue
@@ -149,8 +159,8 @@ def job():
             now = datetime.now(timezone.utc)
             
             cursor.execute('''
-                INSERT INTO spreads (timestamp, asset, best_spread, net_profit, buy_at, sell_at, kraken, coinbase, bitfinex, gemini)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO spreads (timestamp, asset, best_spread, net_profit, buy_at, sell_at, kraken, coinbase, bitfinex, gemini, api_latency_ms)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 now.isoformat(), 
                 asset,
@@ -161,7 +171,8 @@ def job():
                 asks.get("Kraken"),
                 asks.get("Coinbase"),
                 asks.get("Bitfinex"),
-                asks.get("Gemini")
+                asks.get("Gemini"),
+                avg_latency
             ))
             
             # Console output
