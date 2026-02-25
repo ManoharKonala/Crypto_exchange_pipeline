@@ -9,8 +9,10 @@ A professional-grade, real-time cryptocurrency arbitrage scanner. This tool moni
 - **Interactive Terminal**: 
     - **Market Overview**: Global heat-check of all tracked assets.
     - **Deep-Dive Analytics**: Individual asset performance, heatmaps, and price displacement charts.
+    - **Live Telemetry**: Real-time UI sidebar displaying actual API response latencies and system status.
+- **Telegram Alerts**: Automated anti-spam push notifications for profitable net spreads (`>X%`).
 - **Zero Authentication**: Built 100% on public APIs (No KYC/API Keys required for monitoring).
-- **SQLite Backend**: Efficient, serverless local data persistence.
+- **SQLite Backend**: Efficient, serverless local data persistence with indexing for lightning-fast queries.
 
 ## 🛠️ Setup
 
